@@ -2,7 +2,7 @@
 # automagically updated versioning variables -- CVS modifies these!
 #------------------------------------------------
 our $Revision           = '$Revision: 1.1 $';
-our $CheckinDate        = '$Date: 2002/09/13 05:57:58 $';
+our $CheckinDate        = '$Date: 2002/09/20 03:27:06 $';
 our $CheckinUser        = '$Author: xpix $';
 # we need to clean these up right here
 $Revision               =~ s/^\$\S+:\s*(.*?)\s*\$$/$1/sx;
@@ -46,6 +46,7 @@ Tk::IPEntry - A megawidget for input of IP-Adresses IPv4 and IPv6
 # -------------------------------------------------------
 package Tk::IPEntry;
 use strict;
+use Carp;
 
 use Tk;
 use Tk::NumEntry;
@@ -99,7 +100,7 @@ Here come the methods that you can use with this Widget.
 #-------------------------------------------------
 	$specs{-variable}     	= [qw/METHOD  variable   Variable/, undef ];
 
-=head2 $IPEntry->I<variable>($ipnumber);
+=head2 $IPEntry->I<variable>(\$ipnumber);
 
 Specifies the name of a variable. The value of the variable is a text string 
 to be displayed inside the widget; if the variable value changes then the widget 
@@ -121,7 +122,7 @@ Set the IP number to display.
 #-------------------------------------------------
 	$specs{-get}     	= [qw/METHOD  get        Get/, 	 undef ];
 
-=head2 $IPEntry->I<get>($ipnumber);  
+=head2 $IPEntry->I<get>();  
 
 Here you can get IP number from display.
 
@@ -130,7 +131,7 @@ Here you can get IP number from display.
 #-------------------------------------------------
 	$specs{-error}     	= [qw/METHOD  error      Error/, undef ];
 
-=head2 $IPEntry->I<error>($ipnumber);  
+=head2 $IPEntry->I<error>();  
 
 This prints the last error.
 
@@ -290,6 +291,9 @@ sub error {
 
 
 1;
+=head1 EXAMPLES
+
+Please see for examples in 'demos' directory in this distribution.
 
 =head1 AUTHOR
 
@@ -299,7 +303,7 @@ xpix@netzwert.ag
 
 Tk;
 Tk::NumEntry;
-tie::Watch;
+Tie::Watch;
 
 
 __END__
