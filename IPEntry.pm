@@ -1,8 +1,9 @@
+package Tk::IPEntry;
 #------------------------------------------------
 # automagically updated versioning variables -- CVS modifies these!
 #------------------------------------------------
-our $Revision           = '$Revision: 1.1 $';
-our $CheckinDate        = '$Date: 2002/09/20 03:27:06 $';
+our $Revision           = '$Revision: 1.9 $';
+our $CheckinDate        = '$Date: 2002/12/11 16:24:03 $';
 our $CheckinUser        = '$Author: xpix $';
 # we need to clean these up right here
 $Revision               =~ s/^\$\S+:\s*(.*?)\s*\$$/$1/sx;
@@ -44,13 +45,14 @@ Tk::IPEntry - A megawidget for input of IP-Adresses IPv4 and IPv6
 # -------------------------------------------------------
 # ------- S O U R C E -----------------------------------
 # -------------------------------------------------------
-package Tk::IPEntry;
 use strict;
 use Carp;
 
 use Tk;
 use Tk::NumEntry;
+use Tk::HexEntry;
 use Tie::Watch;
+use Net::IP;
 
 # That's the Base
 use base qw/Tk::Frame/;
@@ -115,7 +117,36 @@ widget and may be determined by other options, such as anchor or justify.
 
 =head2 $IPEntry->I<set>($ipnumber);
 
-Set the IP number to display.
+Set the IP number to display. You can use all standart format for IP-Adresses 
+in Version 4 and Version 6. Here comes some examples, please look also in perldoc
+from Net::IP:
+
+  A Net::IP object can be created from a single IP address: 
+  $ip->set('193.0.1.46') || die ...
+  
+
+  Or from a Classless Prefix (a /24 prefix is equivalent to a C class): 
+  $ip->set('195.114.80/24') || die ...
+
+  Or from a range of addresses: 
+  $ip->set('20.34.101.207 - 201.3.9.99') || die ...
+  
+
+  Or from a address plus a number: 
+  $ip->set('20.34.10.0 + 255') || die ...
+ 
+
+  The set() function accepts IPv4 and IPv6 addresses 
+  (it's necessary set -type option to 'ipv6'): 
+  $ip->set('dead:beef::/32') || die ...
+
+
+Very interesting feature, you can give Ip-Ranges and the user can only choice a 
+Ip-Adress in this Range. The other Numbers is disabled. I.E.:
+
+  $ip->set('195.114.80/24') || die ...
+  $ip->set('dead:beef::/32') || die ...
+
 
 =cut
 
@@ -124,7 +155,13 @@ Set the IP number to display.
 
 =head2 $IPEntry->I<get>();  
 
-Here you can get IP number from display.
+Here you can get IP number from display. This is also a Interface to Net::IP,
+in example you will get the binary code from displayed IP-Number then you can
+call:
+
+  $IPEntry->get('binip');
+  
+Please look for all allow commands to Net::IP. 
 
 =cut
 
@@ -155,21 +192,63 @@ This prints the last error.
 				-width	      => 3,
 				-minvalue     => 0,
 				-maxvalue     => 255,
-				-bell	      => 1,
+				-bell	      => 1, 
 			)->pack(
 				-side => 'left'
 			);
+			# Bindings
+			$obj->{nummer}->[$n]->bind('<Key>', 	sub { $obj->fullip } );
+			$obj->{nummer}->[$n]->bind('<Button>', 	sub { $obj->fullip } );
+			$obj->{nummer}->[$n]->bind('<Leave>', 	sub { $obj->fullip } );
+			$obj->{nummer}->[$n]->bind('<FocusOut>',sub { $obj->fullip } );
 		}
 	} 
 	elsif(uc($obj->{type}) eq 'IPV6') 
 	{
 		foreach my $n (0..7) {
-			$obj->{nummer}->[$n] = $obj->Entry(
+			$obj->{nummer}->[$n] = $obj->HexEntry(
 				-width	      => 4,
+				-minvalue     => 0x0000,
+				-maxvalue     => 0xFFFF,
+				-bell	      => 1, 
 			)->pack(
 				-side => 'left'
 			);
 		}
+	}
+	$obj->clear;
+}
+
+# ------------------------------------------
+sub fullip {
+# ------------------------------------------
+	my ($obj) = @_;
+	my $ok;
+	foreach my $v (@{$obj->{minivrefs}}) {
+		$ok = 1 if($v);
+	}
+
+	if( $ok ) {
+		foreach my $v (@{$obj->{minivrefs}}) {
+			$v = 0 unless($v);
+		}
+	}
+
+
+}
+
+# ------------------------------------------
+sub clear {
+# ------------------------------------------
+	my ($obj) = @_;
+	my $c = -1;
+	foreach my $w (@{$obj->{nummer}}) {
+		$c++;
+		$obj->{minivrefs}->[$c] = undef;
+		$obj->{nummer}->[$c]->configure(
+			-textvariable => \$obj->{minivrefs}->[$c]
+		);
+		$w->delete('0','end');
 	}
 }
 
@@ -178,26 +257,35 @@ sub set {
 # ------------------------------------------
 	my ($obj, $adress) = @_;
 
-	# get the new value, split this and give this the 4 or 8 Widgets
-	my @adr;
-	if(uc($obj->{type}) eq 'IPV4') {
-		@adr = split( '\.', $adress);
-	} else {
-		@adr = split( '\:', $adress)
-	}
-	# wrong?
-	if(uc($obj->{type}) eq 'IPV4' and scalar @adr != 4) {
-		return $obj->error('Not right syntax, please put a IpNumber in this format XXX.XXX.XXX.XXX!');
-	} 
-	if (uc($obj->{type}) eq 'IPV6' and scalar @adr != 8) {
-		return $obj->error('Not right syntax, please put a IpNumber in this format ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff!');
+	unless($adress) {
+		$obj->clear();
+		return;
 	}
 
+	unless(defined $obj->{IP}) {
+		$obj->{IP} = Net::IP->new($adress) 
+			|| return $obj->error( Net::IP::Error() );
+	} else {
+		$obj->{IP}->set($adress) 
+			|| return $obj->error( $obj->{IP}->error() );
+	}
+
+	my ($first_ip, $last_ip) = $obj->ip_to_range($adress);
+#	printf "First: %s, Last: %s\n",$first_ip, $last_ip;
+
+	my $delm = (uc($obj->{type}) eq 'IPV4' ? '.' : ':');
+
+	my @first = split( "\\$delm", $first_ip );
+	my @last = split( "\\$delm", $last_ip );
+
 	my $c = -1;
-	foreach my $num (@adr) {
+	foreach my $num ( split( "\\$delm", $obj->{IP}->ip ) ) {
 		$c++;
 		$obj->{minivrefs}->[$c] = $obj->check($num);
 		$obj->{nummer}->[$c]->configure(
+			-state => ( $first_ip ne $last_ip && $first[$c] eq $last[$c] ? 'disabled' : 'normal' ),
+			-minvalue => ( $first[$c] eq $last[$c] ? (uc($obj->{type}) eq 'IPV4' ? 0 : 0x0000) : (uc($obj->{type}) eq 'IPV4' ? $first[$c] : hex($first[$c])) ),
+			-maxvalue => ( $first[$c] eq $last[$c] ? (uc($obj->{type}) eq 'IPV4' ? 0xFF : 0xFFFF) : (uc($obj->{type}) eq 'IPV4' ? $last[$c] : hex($last[$c])) ),
 			-textvariable => \$obj->{minivrefs}->[$c]
 		);
 	}
@@ -206,15 +294,26 @@ sub set {
 # ------------------------------------------
 sub get {
 # ------------------------------------------
-	my ($obj) = @_;
+	my ($obj, $ip_common) = @_;
 	my ($addr);
 
 	my $c = 0;
-	my $delm = ($obj->{type} eq 'IPV4' ? '.' : ':');
+	my $delm = (uc($obj->{type}) eq 'IPV4' ? '.' : ':');
+
 	foreach my $num ( @{ $obj->{minivrefs} } ) {
+		next unless(defined $num);
 		$addr .= $delm if($c++);
 		$addr .= $obj->check($num);
 	}
+
+	$obj->{IP}->set($addr) 
+			|| return $obj->error( $obj->{IP}->error() );
+
+	if($ip_common) {
+		return $obj->{IP}->$ip_common()
+			|| return $obj->error( $obj->{IP}->error() );
+	}
+
 	return $addr;
 }
 
@@ -228,7 +327,9 @@ sub check {
 		if(uc($obj->{type}) eq 'IPV6');
 
 	# wrong?
-	if(uc($obj->{type}) eq 'IPV4' && (int($num) < 0 || int($num) > 255)) {
+	if( uc($obj->{type}) eq 'IPV4' && ! $num ) {
+		return $num;		
+	} elsif(uc($obj->{type}) eq 'IPV4' && (int($num) < 0 || int($num) > 255)) {
 		$obj->error("Number($num) incorrect in IpRange");
 		$num = ($num < 0 ? 0 : 255);
 	}
@@ -260,7 +361,6 @@ sub variable {
 		my $getvar = $obj->get();
 		$self->Store($getvar)
 			if($getvar);
-		printf ("Fetch: %s\tGet: %s\n", $var, $getvar);
 		return ($getvar ? $getvar : $var);
 	}, $obj];
 
@@ -275,17 +375,33 @@ sub variable {
 } # end variable
 
 # ------------------------------------------
+sub ip_to_range {
+# ------------------------------------------
+	my ($obj, $ip) = @_;
+
+	my $addr = Net::IP->new($ip) 
+		or return error("Cannot create IP object $_: ".Net::IP::Error());
+		
+#	printf ("%18s    %15s - %-15s [%s]\n",$addr->print(),$addr->ip(),$addr->last_ip(), $addr->size());
+
+	return ($addr->ip(),$addr->last_ip());
+}
+
+# ------------------------------------------
 sub error {
 # ------------------------------------------
 	my $self = shift;
-	my $msg = shift;
+	my ($package, $filename, $line, $subroutine, $hasargs,
+    		$wantarray, $evaltext, $is_require, $hints, $bitmask) = caller(1);
+	my $msg = shift || return undef;
+	warn sprintf("ERROR in %s:%s #%d: %s",
+		$package, $subroutine, $line, sprintf($msg, @_));
 	unless($msg) {
 		my $err = $self->{error};
 		$self->{error} = '';
 		return $err;
 	}
 	$self->{error} = $msg;
-	warn $msg;
 	return undef;
 } 
 
@@ -304,6 +420,6 @@ xpix@netzwert.ag
 Tk;
 Tk::NumEntry;
 Tie::Watch;
-
+Net::IP;
 
 __END__

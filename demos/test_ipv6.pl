@@ -16,7 +16,7 @@
  my $entry = $fr->IPEntry(
 	-background => 'gray80',
 	-variable  => \$ipadress,
-	-type	   => 'ipv4',
+	-type	   => 'ipv6',
  )->pack(-side => 'left');
 
  my $button1 = $fr->Button(
@@ -33,9 +33,9 @@
 		},
  )->pack(-side => 'left');
 
- $ipadress = '121.0/29';
+ $ipadress = 'FF01:0:0:0:0:0:0:101';
  # ------------------------------------ 
-    my $ips = '121.0/29';
+    my $ips = 'FF01:0:0:0:0:0:0:101';
     my $i = $fa->BrowseEntry(
     	-label => "Ip:", 
     	-variable => \$ips,
@@ -43,10 +43,12 @@
 		$entry->set($ips);
 		},
     	);
-    $i->insert("end", "121.0/29");
-    $i->insert("end", "196.168/24");
-    $i->insert("end", "196.168/23");
-    $i->insert("end", "196.168/22");
+    $i->insert("end", "3ffe:ffff:0100:f101:0210:a4ff:fee3:9566");
+    $i->insert("end", "3ffe:ffff:100:f101:210:a4ff:fee3:9566");
+    $i->insert("end", "FF01:0:0:0:0:0:0:101");
+    $i->insert("end", "0:0:0:0:0:FFFF:129.144.52.38");
+    $i->insert("end", "::FFFF:129.144.52.38");
+    $i->insert("end", "3ffe:ffff:100:f101::/64");
     $i->pack(-side => 'left');
 
 
